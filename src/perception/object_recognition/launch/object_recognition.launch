@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<launch>
+
+	<!--<include file="$(find object_recognition)/launch/darknet_ros.launch" />-->
+	<!-- from2Dto3D -->
+	<node pkg="from2dto3d" type="from2dto3d" name="from2Dto3D" />
+
+	<!-- Segmentation -->
+	<node pkg="plane_segmentation" type="plane_segmentation" name="plane_segmentation"/>
+
+	<!-- Classify Object -->
+	<node pkg="object_recognition" type="object_recognition" name="object_recognition" output= "screen"/>
+
+	<!-- run rviz if needed -->
+	<!--<node name="rviz" pkg="rviz" type="rviz" args="-d $(find object_detection)/config/objects_detection.rviz"/> -->
+
+
+</launch>
+
+

@@ -1,0 +1,9 @@
+time time_stamp
+sensor_msgs/PointCloud2 pc2
+darknet_ros_msgs/BoundingBoxes bboxes_NewObjects
+int32 width
+int32 height
+float32 g_xmin
+float32 g_ymin
+float32 g_xmax
+float32 g_ymax

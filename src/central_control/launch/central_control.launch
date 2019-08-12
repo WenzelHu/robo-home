@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+
+   <rosparam file="$(find central_control)/configs/pick_motions.yaml"/>
+
+   <node name="central_control" pkg="central_control" type="central_control" output="screen"/>
+
+</launch>

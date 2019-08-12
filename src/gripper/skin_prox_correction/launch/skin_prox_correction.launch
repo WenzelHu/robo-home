@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+
+  <!--<rosparam file="$(find gripper_stiffness_controller)/configs/controller_parameters.yaml"/>-->
+
+  <node name="skin_prox_correction" pkg="skin_prox_correction" type="skin_prox_correction" output="screen"/>
+
+</launch>

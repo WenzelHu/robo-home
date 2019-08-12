@@ -1,0 +1,204 @@
+#include <ros/ros.h>
+#include <ros/console.h>
+#include <math.h>  
+#include <image_transport/image_transport.h>
+#include <cv_bridge/cv_bridge.h>
+#include <sensor_msgs/image_encodings.h>
+//#include <sensor_msgs/point_cloud_conversion.h>
+//#include <geometry_msgs/Point.h>
+#include <std_msgs/Char.h>
+
+#include <message_filters/subscriber.h>
+#include <message_filters/synchronizer.h>
+#include <message_filters/sync_policies/exact_time.h>
+#include <message_filters/sync_policies/approximate_time.h>
+
+#include <sensor_msgs/Image.h>
+#include <sensor_msgs/image_encodings.h>
+
+
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
+
+
+// PCL specific includes
+#include <pcl_ros/point_cloud.h> // enable pcl publishing
+#include <sensor_msgs/PointCloud2.h>
+
+#include <pcl_conversions/pcl_conversions.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl_ros/point_cloud.h>
+
+//#include <image_geometry/pinhole_camera_model.h>
+
+
+#include <perception_msgs/Rect.h>
+#include <perception_msgs/GetCenter.h>
+
+using namespace std;
+using namespace cv;
+
+
+class From2Dto3D
+{
+
+    private:
+  
+      //! The node handle
+      ros::NodeHandle nh_;
+      //! Node handle in the private namespace
+      ros::NodeHandle priv_nh_;
+
+      //! Define publishers and subscribers
+      ros::Subscriber sub_pc2;
+      //ros::Subscriber sub_bbox;
+      //ros::Publisher pub_pc3d;
+
+      ros::ServiceServer srv_GetCenter;
+
+      //! Define the pointcloud structure and the bounding box local copy
+      sensor_msgs::PointCloud2ConstPtr cloud3DPtr;
+      //sensor_msgs::PointCloud2 cloud2;
+      
+      pthread_mutex_t count_mutex;
+      
+      bool FLAG_VALID;
+	  
+      //! A tf transform listener if needed
+        //tf::TransformListener listener_;
+        //geometry_msgs::PointStamped transformPoint(const tf::TransformListener& listener, const geometry_msgs::PointStamped& mov_point);
+      
+
+      
+      //------------------ Callbacks -------------------
+
+      //! Process clusters
+      void GetCloud(const sensor_msgs::PointCloud2ConstPtr& pc);
+      //! Process bounding boxes
+     // void processRect(const perception_msgs::RectConstPtr& r);
+      bool GetClass3DCenter(perception_msgs::GetCenter::Request& req,perception_msgs::GetCenter::Response& res);
+
+    public:
+      //! Subscribes to and advertises topics
+      From2Dto3D(ros::NodeHandle nh) : nh_(nh), priv_nh_("~")
+      {
+      	count_mutex = PTHREAD_MUTEX_INITIALIZER;
+      	FLAG_VALID = false;
+        // subscribers to the bounding boxes and the point cloud
+        // format:
+        // sub_name = nh_.subscribe<Type>("topic", queuesize, Function_of_the_class, this);
+        //From2Dto3D tmp;
+        sub_pc2 = nh_.subscribe<sensor_msgs::PointCloud2>("/xtion/depth_registered/points", 100, &From2Dto3D::GetCloud,this);
+        //sub_pc2 = nh_.subscribe<sensor_msgs::PointCloud2>("/segmentation/clusters_points", 100, &From2Dto3D::processCloud,this);
+        //sub_bbox = nh_.subscribe<perception_msgs::Rect>("boundingbox", 100, &From2Dto3D::processRect,this);
+        // Publishers
+        // format:
+        //pub_name = nh_.advertise< Type >("topic", queuesize);
+        //pub_pc3d = nh_.advertise<geometry_msgs::Point>("/segmentation/point3D", 100);
+        //ROS_INFO("from2Dto3D initialized ...");
+        srv_GetCenter = nh_.advertiseService("perception/ClassCenter",&From2Dto3D::GetClass3DCenter,this);
+      }
+
+      ~From2Dto3D() {}
+};
+
+void From2Dto3D::GetCloud(const sensor_msgs::PointCloud2ConstPtr& pc)
+{   
+    // store local data copy or shared, depending on the message
+	 //pcl::fromROSMsg(*pc,cloud3D);
+	//pthread_mutex_lock(&this->count_mutex);
+	//ROS_INFO("received new point cloud"); 
+	cloud3DPtr = pc;
+	FLAG_VALID = true;
+	//pthread_mutex_unlock(&this->count_mutex);
+}
+
+bool From2Dto3D::GetClass3DCenter(perception_msgs::GetCenter::Request& req,perception_msgs::GetCenter::Response& res){
+	ROS_INFO("calculating");
+    int center_x = req.bounding_box.x+(req.bounding_box.width)/2;
+    int center_y = req.bounding_box.y+(req.bounding_box.height)/2;
+    std::cout<<"received bbox center"<<std::endl;
+	std::cout<<"x = "<<center_x<<" y = "<<center_y<<std::endl;
+    float x,y,z;
+    int randomNum_x,randomNum_y;
+    pcl::PointCloud<pcl::PointXYZRGB> cloud3D;
+    if(!FLAG_VALID){
+    	ROS_INFO("waiting for the first point cloud transmission");
+    	return false;
+    	}
+  
+
+    pthread_mutex_lock(&this->count_mutex);
+    pcl::fromROSMsg(*cloud3DPtr,cloud3D);
+    pthread_mutex_unlock(&this->count_mutex);
+
+    x = cloud3D.at(center_x,center_y).x;
+    y = cloud3D.at(center_x,center_y).y;
+    z = cloud3D.at(center_x,center_y).z;
+    
+	int loopnum = 1;
+    while(isnan(x)||isnan(y)||isnan(z)){
+      randomNum_x = rand() % 11 + (-5);
+      randomNum_y = rand() % 11 + (-5);
+      x = cloud3D.at(center_x+randomNum_x,center_y+randomNum_y).x;
+      y = cloud3D.at(center_x+randomNum_x,center_y+randomNum_y).y;
+      z = cloud3D.at(center_x+randomNum_x,center_y+randomNum_y).z;
+      loopnum++;
+      if(loopnum>20)
+      	return false;
+	}   
+	
+    //if(isnan(x)||isnan(y)||isnan(z))
+    //	return false;
+
+/*
+    if(TF_ENABLE){
+      geometry_msgs::PointStamped point_in_terms_of_head;
+      point_in_terms_of_head.header.frame_id = "head_1_link";
+      point_in_terms_of_head.header.stamp = ros::Time();
+
+      point_in_terms_of_head.point.x = x;
+      point_in_terms_of_head.point.y = y;
+      point_in_terms_of_head.point.z = z;
+
+      geometry_msgs::PointStamped point_tmp;
+
+      point_tmp = From2Dto3D::transformPoint(listener_,point_in_terms_of_head);
+
+      x = point_tmp.point.x; y = point_tmp.point.y; z = point_tmp.point.z; 
+    }
+*/
+	std::cout<<"center"<<std::endl;
+	std::cout<<"x = "<<x<<" y = "<<y<<" z = "<<z<<std::endl;
+    res.x = x;
+    res.y = y;
+    res.z = z;
+    return true;
+}
+
+/*
+ geometry_msgs::PointStamped From2Dto3D::transformPoint(const tf::TransformListener& listener, const geometry_msgs::PointStamped& mov_point){
+  try{
+    geometry_msgs::PointStamped base_point;
+    listener.transformPoint("torso_fixed_link", mov_point, base_point);
+
+    ROS_INFO("base_laser: (%.2f, %.2f. %.2f) -----> base_link: (%.2f, %.2f, %.2f) at time %.2f",
+        mov_point.point.x, mov_point.point.y, mov_point.point.z,
+        base_point.point.x, base_point.point.y, base_point.point.z, base_point.header.stamp.toSec());
+  }
+  catch(tf::TransformException& ex){
+    ROS_ERROR("Received an exception trying to transform a point from \"base_laser\" to \"base_link\": %s", ex.what());
+    }
+  }
+*/
+
+int main(int argc, char** argv)
+{
+    ros::init(argc, argv, "from2Dto3D");
+    ros::NodeHandle nh;
+    From2Dto3D node(nh);
+    ros::spin();
+    return 0;
+}

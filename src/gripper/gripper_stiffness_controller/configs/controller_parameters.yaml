@@ -1,0 +1,8 @@
+gain:
+  M_hard: 0.08
+  K_hard: 10
+  B_hard: 0.05
+  M_soft: 0.05
+  K_soft: 4
+  B_soft: 0.2
+

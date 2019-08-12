@@ -1,0 +1,8 @@
+
+---
+geometry_msgs/Vector3Stamped vel_EndEff
+geometry_msgs/PointStamped pos_EndEff
+geometry_msgs/PoseStamped desired_goal_pose
+geometry_msgs/Vector3Stamped ft_force
+geometry_msgs/Vector3Stamped acc_offset
+geometry_msgs/Vector3Stamped goal_offset

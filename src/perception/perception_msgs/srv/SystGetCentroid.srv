@@ -1,0 +1,3 @@
+string Name
+---
+geometry_msgs/PointStamped centroid

@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+
+  <rosparam file="$(find gripper_stiffness_controller)/configs/controller_parameters.yaml"/>
+
+  <node name="gripper_stiffness_controller" pkg="gripper_stiffness_controller" type="gripper_stiffness_controller" output="screen"/>
+
+</launch>

@@ -1,0 +1,7 @@
+gain:
+  M_admittance: 0.1
+  K_admittance: 5
+  B_admittance: 0.2
+  K_impedance: 2
+  B_impedance: 0.2
+  M_impedance: 0.1

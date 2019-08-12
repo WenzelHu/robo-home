@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<launch>
+
+  <include file="$(find tiago_skin)/launch/load_and_view_patches.launch"/>
+
+  <include file="$(find gripper_stiffness_controller)/launch/gripper_stiffness_controller.launch"/>
+
+  <include file="$(find skin_prox_correction)/launch/skin_prox_correction.launch"/>
+
+</launch>

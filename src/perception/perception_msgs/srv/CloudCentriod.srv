@@ -1,0 +1,6 @@
+sensor_msgs/PointCloud2 pc
+perception_msgs/Rect bounding_box
+---
+float32 x
+float32 y
+float32 z

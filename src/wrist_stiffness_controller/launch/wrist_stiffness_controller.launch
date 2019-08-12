@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<launch>
+  <rosparam command="load" file="$(find wrist_stiffness_controller)/config/stiffness_params.yaml" />
+  <!--<node name="msg_tf_node" pkg="wrist_stiffness_controller" type="msg_tf_node" output="screen" />-->
+  <node name="wrist_stiffness_controller" pkg="wrist_stiffness_controller" type="wrist_stiffness_controller" output="screen" />
+</launch>

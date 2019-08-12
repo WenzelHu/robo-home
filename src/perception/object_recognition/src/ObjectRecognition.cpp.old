@@ -1,0 +1,342 @@
+#include <ros/ros.h>
+#include <sensor_msgs/Image.h>
+#include <std_msgs/Int8.h>
+#include <sensor_msgs/PointCloud2.h>
+#include <actionlib/client/simple_action_client.h>
+#include <darknet_ros_msgs/BoundingBoxes.h>
+//#include <geometry_msgs/Point.h>
+#include <geometry_msgs/PointStamped.h>
+// boost
+#include <boost/thread.hpp>
+
+#include <darknet_ros_msgs/CheckForObjectsAction.h>
+#include <perception_msgs/Rect.h>
+#include <perception_msgs/GetCenter.h>
+#include <perception_msgs/GetCentroid.h>
+#include <perception_msgs/SystGetCentroid.h>
+#include <perception_msgs/SystYOLO_SetState.h>
+
+#include <tf/transform_listener.h>
+
+#include <limits>
+/*********************************************************************
+* EIGEN INCLUDES
+********************************************************************/
+#include <Eigen/Eigen>
+#include <Eigen/StdVector>
+#include <Eigen/Geometry>
+#include <Eigen/Core>
+
+#include <vector>
+
+//using namespace Eigen;
+
+#define YOLO_ENABLE 1
+#define YOLO_DISABLE 0
+#define IMAGE_BUF_SIZE_ros 20
+
+typedef actionlib::SimpleActionClient<darknet_ros_msgs::CheckForObjectsAction> Client;
+typedef std::shared_ptr<Client> ClientPtr;
+
+class ObjectRecogenition{
+private:
+	//! The node handle
+	//ros::NodeHandle nh;
+
+	//! Subscribers to the bounding box data from YOLO
+	ros::Subscriber sub_image;
+
+	ros::Subscriber sub_obj_num;
+	//ros::Subscriber sub_clusters;
+	ros::Subscriber sub_bbox;
+	ros::Subscriber sub_pc2;
+	//ros::Publisher pub_bbox;
+
+	//ros::Publisher pub_image;
+
+	ros::ServiceServer srv_ext; //receive external call for object centroid
+	ros::ServiceServer srv_yolo_enable;
+	ros::ServiceClient client_GetCentroid; //-->PlaneSegmentation
+	ros::ServiceClient client_GetCenter;   //-->from2dto3d
+
+	//!Action Client
+	ClientPtr ac; //send goal to YOLOv2
+
+	//local object position data
+	std::vector<float> x;
+	std::vector<float> y;
+	std::vector<float> z;
+	std::vector<std::string> class_name;
+	std::vector<geometry_msgs::PointStamped> class_centroid;
+	int state;
+	std::vector<sensor_msgs::Image> buf_image;
+	ros::Time image_time_stamp;
+
+	darknet_ros_msgs::BoundingBoxesConstPtr curr_bounding_box;
+
+	bool FLAG_CMP_DONE;
+
+
+	/////////////Callbacks
+	void GetCloud(const sensor_msgs::PointCloud2ConstPtr& pc);
+	void GetImage(const sensor_msgs::ImageConstPtr& img);
+	void ProcessBoundingBox(const darknet_ros_msgs::BoundingBoxesConstPtr& msg_bbox);
+	void GetBoundingBoxNumber(const std_msgs::Int8 num);
+	bool SendCentroidToSystem(perception_msgs::SystGetCentroid::Request& req,perception_msgs::SystGetCentroid::Response& res);
+	bool YOLO_SetState(perception_msgs::SystYOLO_SetState::Request& req,perception_msgs::SystYOLO_SetState::Response& res);
+	//void Get3DCentroid(const geometry_msgs::PointConstPtr& centroid);
+	//perception_msgs::ClassCent ObjectRecogenition::GetClass3DCentroid(const perception_msgs::ClassCent::ConstPtr& srv);
+
+	tf::TransformListener listener_;
+
+	geometry_msgs::PointStamped transformPoint(const tf::TransformListener& listener, const geometry_msgs::PointStamped& mov_point);
+
+	int BoundingBoxNumber;
+	
+	////////////////////debug
+	ros::Publisher pub_debug_centroid;
+	geometry_msgs::PointStamped debug_centroid;
+	/////////////////////////
+public:	
+	
+	ObjectRecogenition(ros::NodeHandle nh):listener_(ros::Duration(15),true) 
+	{
+		BoundingBoxNumber = 0;
+		state = 0;
+		FLAG_CMP_DONE = true;
+		std::string checkForObjectsActionName;
+		nh.param("/darknet_ros/camera_action", checkForObjectsActionName, std::string("/darknet_ros/check_for_objects"));
+  		ac.reset(new Client(nh, checkForObjectsActionName,true));
+
+		sub_image = nh.subscribe<sensor_msgs::Image>("/xtion/rgb/image_rect_color",100,&ObjectRecogenition::GetImage,this);
+		sub_obj_num = nh.subscribe<std_msgs::Int8>("/darknet_ros/found_object",100,&ObjectRecogenition::GetBoundingBoxNumber,this);
+		sub_pc2 = nh.subscribe<sensor_msgs::PointCloud2>("/xtion/depth_registered/points", 100, &ObjectRecogenition::GetCloud,this);
+		//pub_image = nh.advertise<sensor_msgs::Image>("/camera_reading",100);
+		sub_bbox = nh.subscribe<darknet_ros_msgs::BoundingBoxes>("/darknet_ros/bounding_boxes",100,&ObjectRecogenition::ProcessBoundingBox,this);
+		//pub_bbox = nh.advertise<perception_msgs::Rect>("boundingbox",100);
+		//sub_clusters = nh.subscribe<perception_msgs::PointCloudArray>("/segmentation/clusters_array_points",100,&Get);
+		//sub_centroid = nh.subscribe<geometry_msgs::Point>("/segmentation/point3D",100,&ObjectRecogenition::Get3DCentroid,this);
+		client_GetCentroid = nh.serviceClient<perception_msgs::GetCentroid>("/perception/ClassCentroid",100);
+		client_GetCenter = nh.serviceClient<perception_msgs::GetCenter>("/perception/ClassCenter",100);
+		srv_ext = nh.advertiseService("/perception/GetCentroid",&ObjectRecogenition::SendCentroidToSystem,this);
+		srv_yolo_enable = nh.advertiseService("/perception/yolo_enable",&ObjectRecogenition::YOLO_SetState,this);
+		////////////////////debug
+		pub_debug_centroid = nh.advertise<geometry_msgs::PointStamped>("/debug/centroid",100);
+		//pub_debug_centroid.publish(debug_centroid);
+		/////////////////////////
+	}
+
+	~ObjectRecogenition(){}
+
+};
+
+	bool ObjectRecogenition::YOLO_SetState(perception_msgs::SystYOLO_SetState::Request& req,perception_msgs::SystYOLO_SetState::Response& res){
+		state = req.state;
+		return true;
+	}
+
+	void ObjectRecogenition::GetCloud(const sensor_msgs::PointCloud2ConstPtr& pc){
+		if(buf_image.empty()){
+			//ROS_INFO("no point cloud");
+			return;
+			}
+		//ROS_INFO("wtf pc");
+		ros::Time pc_time_stamp = (pc->header).stamp;
+		//ROS_INFO("wtf 1");
+		FLAG_CMP_DONE = false;
+		int time_diff;
+		int min_time_diff = 600;
+		int valid_idx = 0;
+
+		
+		for(int i = 0;i<buf_image.size();i++){
+			//std::cout<<"buf_image[i].header.stamp.sec = "<<buf_image[i].header.stamp.sec<<std::endl;
+			//td::cout<<"pc_time_stamp.sec = "<<pc_time_stamp.sec<<std::endl;
+			time_diff = std::abs((int)buf_image[i].header.stamp.sec - (int)pc_time_stamp.sec);
+			//std::cout<<"time_diff = "<<time_diff<<std::endl;
+			if(time_diff<=min_time_diff){
+				min_time_diff = time_diff;
+				valid_idx = i;
+			}
+		}
+		std::cout<<"min_diff = "<<min_time_diff<<std::endl;
+		FLAG_CMP_DONE = true;
+		darknet_ros_msgs::CheckForObjectsGoal goal;
+		goal.image = buf_image[valid_idx];
+		image_time_stamp = (buf_image[valid_idx]).header.stamp;
+		ros::Time beginYolo = ros::Time::now();
+		ac->sendGoal(goal);
+	}
+
+	void ObjectRecogenition::GetImage(const sensor_msgs::ImageConstPtr& img){
+		//ROS_INFO("wtf image");
+		if(state==YOLO_ENABLE){
+			if(!FLAG_CMP_DONE)
+				return;
+			while(buf_image.size()>=IMAGE_BUF_SIZE_ros)
+				buf_image.erase(buf_image.begin());
+
+			buf_image.push_back(*img);
+			/*
+			darknet_ros_msgs::CheckForObjectsGoal goal;
+			goal.image = *img;
+			ros::Time beginYolo = ros::Time::now();
+			ac->sendGoal(goal);
+			*/
+		}else{
+			//ROS_INFO("YOLO deactivated");
+		}
+		/*
+		if(!ac->waitForResult(ros::Duration(30.0))) {
+			std::cout << "[ObjectDetectionTest] sendImageToYolo(): checkForObjects action server took to long to send back result." << std::endl;
+  		}else{
+  			ros::Time endYolo = ros::Time::now();
+  			std::cout << "[ObjectDetectionTest] Object detection for one image took " << endYolo-beginYolo << " seconds." << std::endl;
+  		}
+  		*/
+	}
+
+	void ObjectRecogenition::ProcessBoundingBox(const darknet_ros_msgs::BoundingBoxesConstPtr& msg_bbox){
+	/////////debug
+	pub_debug_centroid.publish(debug_centroid);
+	//////////////
+		for(int i = 1;i<=BoundingBoxNumber;i++){
+			darknet_ros_msgs::BoundingBox curr_bbox;
+			std::string curr_class_name;
+
+			curr_bbox = msg_bbox->bounding_boxes[i-1];
+			curr_class_name = curr_bbox.Class;
+			//determin whether the new object already exists in local variable
+			if(curr_bbox.probability>0.75&&(std::find(class_name.begin(),class_name.end(),curr_class_name)==class_name.end())){
+				//a new object is found
+				//init tf
+				geometry_msgs::PointStamped point_in_terms_of_head;
+				point_in_terms_of_head.header.frame_id = "/xtion_rgb_optical_frame";
+				
+				//class_name.push_back(curr_class_name);
+
+				perception_msgs::Rect msg_bbox_mod;
+
+				perception_msgs::GetCentroid srv_GetCentroid;
+				perception_msgs::GetCenter srv_GetCenter;
+
+				//construct srv_GetCenter.bounding_box--local: msg_bbox_mod
+				msg_bbox_mod.id = i;
+				msg_bbox_mod.x = curr_bbox.xmin;
+				msg_bbox_mod.y = curr_bbox.ymin;
+				msg_bbox_mod.width = curr_bbox.xmax-curr_bbox.xmin;
+				msg_bbox_mod.height = curr_bbox.ymax-curr_bbox.ymin;
+				srv_GetCenter.request.bounding_box = msg_bbox_mod;
+				
+				//call these 2 services simultaneously
+				//client_GetCentroid.call(srv_GetCentroid);
+				//client_GetCenter.call(srv_GetCenter);
+				if(client_GetCentroid.call(srv_GetCentroid) && client_GetCenter.call(srv_GetCenter)){
+				
+				class_name.push_back(curr_class_name);
+
+				//if(client_GetCenter.call(srv_GetCenter)){
+				//if(client_GetCentroid.call(srv_GetCentroid)){
+					float error;
+					float tmp_error = std::numeric_limits<float>::max();
+					float tmp_x,tmp_y,tmp_z;
+					int size = srv_GetCentroid.response.size;
+					std::cout<<"bbox num "<<size<<std::endl;
+					for(int j = srv_GetCentroid.response.size-1;j>=0;j--)
+					{
+					
+					std::cout<<"Centroid No. "<<j+1;
+					std::cout<<" x="<<srv_GetCentroid.response.x[j]<<" y="<<srv_GetCentroid.response.y[j]<<" z="<<srv_GetCentroid.response.z[j]<<std::endl;
+					std::cout<<"current center";
+					std::cout<<" x="<<srv_GetCenter.response.x<<" y="<<srv_GetCenter.response.y<<" z="<<srv_GetCenter.response.z<<std::endl;
+					
+						error = \
+						(srv_GetCenter.response.x-srv_GetCentroid.response.x[j])*(srv_GetCenter.response.x-srv_GetCentroid.response.x[j]) + \
+						(srv_GetCenter.response.y-srv_GetCentroid.response.y[j])*(srv_GetCenter.response.y-srv_GetCentroid.response.y[j]) + \
+						(srv_GetCenter.response.z-srv_GetCentroid.response.z[j])*(srv_GetCenter.response.z-srv_GetCentroid.response.z[j]);
+						if(error<=tmp_error)
+						{
+							tmp_error = error;
+							tmp_x = srv_GetCentroid.response.x[j];
+							tmp_y = srv_GetCentroid.response.y[j];
+							tmp_z = srv_GetCentroid.response.z[j];
+						}
+					}
+
+					//coord. tf
+					
+      				//point_in_terms_of_head.header.stamp = ros::Time(0);
+					point_in_terms_of_head.header.stamp = image_time_stamp;
+      				point_in_terms_of_head.point.x = tmp_x;
+      				point_in_terms_of_head.point.y = tmp_y;
+      				point_in_terms_of_head.point.z = tmp_z;
+
+      				geometry_msgs::PointStamped point_tmp;
+
+      				point_tmp = ObjectRecogenition::transformPoint(listener_,point_in_terms_of_head);
+      				
+      				//debug_centroid = point_tmp;
+
+					//std::cout<<point_tmp.point.x<<" "<<point_tmp.point.y<<" "<<point_tmp.point.z<<std::endl;
+				
+
+				x.push_back(point_tmp.point.x); y.push_back(point_tmp.point.y); z.push_back(point_tmp.point.z);
+				class_centroid.push_back(point_tmp);
+				
+				
+				debug_centroid = class_centroid.at(0);
+				
+				
+				//x.push_back(tmp_x); y.push_back(tmp_y); z.push_back(tmp_z);
+				std::cout << "new object: " << curr_class_name << " found at: ";
+				printf("[%f,%f,%f]\n",x.back(),y.back(),z.back());
+				}else
+					ROS_INFO("error: service call failed! skip this frame");
+				
+			} 
+			
+		}
+	}
+
+	void ObjectRecogenition::GetBoundingBoxNumber(const std_msgs::Int8 num){
+		BoundingBoxNumber = num.data;
+		//ROS_INFO("%d objects recognized",BoundingBoxNumber);
+	}
+
+	geometry_msgs::PointStamped ObjectRecogenition::transformPoint(const tf::TransformListener& listener, const geometry_msgs::PointStamped& mov_point){
+  	try{
+    	geometry_msgs::PointStamped base_point;
+    	//listener.transformPoint("torso_fixed_link", mov_point, base_point);
+    	listener.transformPoint("base_footprint", mov_point, base_point);
+
+    	ROS_INFO("xtion_rgb_optical_frame: (%.2f, %.2f. %.2f) -----> torso_fixed_link: (%.2f, %.2f, %.2f) at time %.2f",
+        mov_point.point.x, mov_point.point.y, mov_point.point.z,
+        base_point.point.x, base_point.point.y, base_point.point.z, base_point.header.stamp.toSec());
+        return base_point;
+  	}
+  	catch(tf::TransformException& ex){
+    	ROS_ERROR("Received an exception trying to transform a point from \"base_laser\" to \"base_link\": %s", ex.what());
+    }
+  }
+
+
+  	bool ObjectRecogenition::SendCentroidToSystem(perception_msgs::SystGetCentroid::Request& req,perception_msgs::SystGetCentroid::Response& res){
+  		std::vector<std::string>::iterator it;
+  		ptrdiff_t  pos = std::find(class_name.begin(),class_name.end(),req.Name)-class_name.begin();
+  		std::cout<<(int)pos<<std::endl;
+  		if(pos >= class_name.size()) {
+    		ROS_INFO("Required object does not exists!");
+    		return false;
+		}
+		res.centroid = class_centroid.at(pos);
+  		return true;
+  	}
+
+int main(int argc, char** argv)
+{
+    ros::init(argc, argv, "object_recognition");
+    ros::NodeHandle nh;
+    ObjectRecogenition node(nh);
+    ros::spin();
+    return 0;
+}

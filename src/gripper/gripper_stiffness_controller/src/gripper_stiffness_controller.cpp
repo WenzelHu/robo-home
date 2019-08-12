@@ -2,7 +2,7 @@
 #include <ros/ros.h>
 #include <sensor_msgs/JointState.h>
 #include <trajectory_msgs/JointTrajectory.h>
-#include <tum_ics_skin_msgs/SkinCellDataArray.h>
+//#include <tum_ics_skin_msgs/SkinCellDataArray.h>
 #include <gripper_stiffness_controller/gripper_control.h>
 #include <pal_interaction_msgs/TtsActionGoal.h>
 
@@ -35,8 +35,8 @@ private:
 	void GetCurrentState(const sensor_msgs::JointState::ConstPtr& msg_curr_state);
 	bool ControlGripper(gripper_stiffness_controller::gripper_control::Request &req, gripper_stiffness_controller::gripper_control::Response &res);
 	void SetGoal(float pos_left, float pos_right, float vel_left, float vel_right, ros::Duration dt);
-	void Get_prox_pathch_3(const tum_ics_skin_msgs::SkinCellDataArray::ConstPtr &data_patch);
-	void Get_prox_pathch_5(const tum_ics_skin_msgs::SkinCellDataArray::ConstPtr &data_patch);
+	//void Get_prox_pathch_3(const tum_ics_skin_msgs::SkinCellDataArray::ConstPtr &data_patch);
+	//void Get_prox_pathch_5(const tum_ics_skin_msgs::SkinCellDataArray::ConstPtr &data_patch);
 
 public:
 	float t;
@@ -51,8 +51,8 @@ public:
     	Text_to_Speech = nh_.advertise<pal_interaction_msgs::TtsActionGoal>("/tts/goal", 10);
 		pub_CurrentGoalPose = nh_.advertise<trajectory_msgs::JointTrajectory>("/gripper_controller/command",10);
     	service = nh_.advertiseService("gripper_control", &GripperStiffnessController::ControlGripper, this);
-    	patch_3 = nh_.subscribe<tum_ics_skin_msgs::SkinCellDataArray>("/tiago/patch3", 10, &GripperStiffnessController::Get_prox_pathch_3, this);
-    	patch_5 = nh_.subscribe<tum_ics_skin_msgs::SkinCellDataArray>("/tiago/patch5", 10, &GripperStiffnessController::Get_prox_pathch_5, this);
+    	//patch_3 = nh_.subscribe<tum_ics_skin_msgs::SkinCellDataArray>("/tiago/patch3", 10, &GripperStiffnessController::Get_prox_pathch_3, this);
+    	//patch_5 = nh_.subscribe<tum_ics_skin_msgs::SkinCellDataArray>("/tiago/patch5", 10, &GripperStiffnessController::Get_prox_pathch_5, this);
 
 		priv_nh_.getParam("/gain/M_hard", M_hard);
 		priv_nh_.getParam("/gain/K_hard", K_hard);
@@ -100,6 +100,7 @@ public:
 	}
 };
 
+/*
 void GripperStiffnessController::Get_prox_pathch_3(const tum_ics_skin_msgs::SkinCellDataArray::ConstPtr &data_patch) //Get the prox of right finger
 {
   pitch_3_temp = data_patch->data.data()->temp[0];
@@ -142,7 +143,7 @@ void GripperStiffnessController::Get_prox_pathch_5(const tum_ics_skin_msgs::Skin
     flag_pitch_5_hot_pub = false;
   }
 }
-
+*/
 
 void GripperStiffnessController::GetCurrentState(const sensor_msgs::JointState::ConstPtr& msg_curr_state)
 {

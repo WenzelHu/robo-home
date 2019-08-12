@@ -29,7 +29,7 @@
   <build_depend>actionlib_msgs</build_depend>
   <build_depend>trajectory_msgs</build_depend>
   <build_depend>play_motion_msgs</build_depend>
-
+  <build_depend>gripper_stiffness_controller</build_depend>
 
   <run_depend>geometry_msgs</run_depend>
   <run_depend>perception_msgs</run_depend>
@@ -41,6 +41,7 @@
   <run_depend>actionlib_msgs</run_depend>
   <run_depend>trajectory_msgs</run_depend>
   <run_depend>play_motion_msgs</run_depend>
+  <run_depend>gripper_stiffness_controller</run_depend>
 
 
 

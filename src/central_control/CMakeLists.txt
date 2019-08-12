@@ -21,6 +21,7 @@ find_package(catkin REQUIRED COMPONENTS
   actionlib_msgs
   trajectory_msgs
   play_motion_msgs
+  gripper_stiffness_controller
 )
 
 ## System dependencies are found with CMake's conventions
@@ -78,10 +79,10 @@ find_package(catkin REQUIRED COMPONENTS
 # )
 
 ## Generate added messages and services with any dependencies listed here
- generate_messages(
-   DEPENDENCIES
-   geometry_msgs  perception_msgs std_msgs
- )
+# generate_messages(
+#   DEPENDENCIES
+#   geometry_msgs  perception_msgs std_msgs gripper_stiffness_controller
+# )
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##

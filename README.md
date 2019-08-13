@@ -5,11 +5,9 @@
 One of the most convenient and advanced ways of moving robot’s arm to a desired position and grasp an object and avoid collision with obstacles is using *moveit* motion planning framework. Once the desired goal is sent to the *move_it* node, it will calculate a path that pypasses obstacles and reaches the goal. And by execuing this path, *move_it* will communicate with the physical interface of robot and the robot will be moved.
 
 However, in our ﬁnal project, we propose to manipulate the robot without using *move_it*. According to some control laws that will implement impedance and admittance control of arm andgripper, some values will be calculated and directly sent to the physical interface of robot. Moreover, skins are used to modify the values sent to robot. By incorporating controllers and skin, complinat grapsing adaptve to the environment is implemented. General structure of the project is as following.
-<center>
-
-![figure1](https://github.com/WenzelHu/robo-home/raw/master/imgs/figure1.PNG)
-
-</center>
+<p align="center"> 
+<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/figure1.PNG" width = "400" height="300">
+</p>
 
 ## 2. Cartesian Controller
 
@@ -45,11 +43,9 @@ For this purpose, member function `CartToJnt` of the class IKsolver can be used,
 
 In addition to that, because of the current goal update scheme of the arm admittance control, current goal positions are only positions that are slightly shifted from the current position, and the accumulation of reaching these set of goals results in reaching our ultimate goal position. Therefore, converted goal joint values should only change a little bit as well comparing to current joint values. If the difference between current joint values and calculated goal joint values is beyond some thereshold, we consider this goal would make the robot arm move too violently and would discard this goal. In this way, rapid move of the arm, which may cause damage to the robot, is avoided.
 
-<center>
-
-![table1](<https://github.com/WenzelHu/robo-home/raw/master/imgs/table1.PNG> =500x300)
-
-</center>
+<p align="center"> 
+<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/table1.PNG" width = "500" height="300">
+</p>
 
 ### 2.5 Subtask4: Inverse kinematics for velocity
 
@@ -62,11 +58,9 @@ For implementation of inverse kinematics for velocity though, there is problem i
 Fortunately, the previous IK solver for position works properly and yields a Jacobian matrix for us. We can use singular value decomposition of the Jacobian matrix to calculate its pseudo inverse matrix. Pre multipy the goal cartesian velocity by the pseudo inverse matrix, the result is the goal joint velocity.
 To this end, we ﬁll in the corresponding joint values and joint velocities into the command message and publish it to the arm controller. The arm then would move accordingly.
 
-<center>
-
-![figure2](<https://github.com/WenzelHu/robo-home/raw/master/imgs/figure2.PNG> =500x500)
-
-</center>
+<p align="center"> 
+<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/figure2.PNG" width = "400" height="400">
+</p>
 
 ## 3. Perception
 
@@ -74,11 +68,9 @@ To this end, we ﬁll in the corresponding joint values and joint velocities int
 
 In the ﬁnal project, we implemented a new pipeline, to make it more reliable. Figure 3 shows the structure of the system.
 
-<center>
-
-![figure3](<https://github.com/WenzelHu/robo-home/raw/master/imgs/figure3.PNG> =600x400)
-
-</center>
+<p align="center"> 
+<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/figure3.PNG" width = "400" height="300">
+</p>
 
 There are 5 main functional blocks, following sections will explain what is going on in each block and how they works.
 
@@ -100,21 +92,15 @@ This block was written in one node to perform plane segmentation. Some informati
 
 This block was written in one node to calculate the centroid of each class in the bounding boxes. Since the calibration matrix or camera intrinsic matrix is unknown, we have to project the points in the point cloud back to picture plane, to determine wether a point is within a bounding box or not. Note that the bounding box is on the pixel plane, we need to perform another projection from the pixel plane to the picture plane. Traversing all the points, and note down which points are belong to which bounding boxes. The Centroids for each bounding boxes is calculated with a pcl built-in function, and then it is sent back to the main node.
 
-<center>
-
-![figure4](<https://github.com/WenzelHu/robo-home/raw/master/imgs/figure4.PNG> =500x250)
-
-</center>
-<center>
-
-![figure5](<https://github.com/WenzelHu/robo-home/raw/master/imgs/figure5.PNG> =500x350)
-
-</center>
-<center>
-
-![figure6](<https://github.com/WenzelHu/robo-home/raw/master/imgs/figure6.PNG> =500x200)
-
-</center>
+<p align="center"> 
+<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/figure4.PNG" width = "400" height="200">
+</p>
+<p align="center"> 
+<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/figure5.PNG" width = "400" height="250">
+</p>
+<p align="center"> 
+<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/figure6.PNG" width = "400" height="200">
+</p>
 
 ### 3.6  Class-Centroid Registration
 
@@ -134,14 +120,11 @@ Physical power could be represented by the product of ﬂow and effort, eg. in e
 
 The terms impedance and admittance originate from electrical system, to determine wether a system performs a impedance or admittance behavior, we need to tell, what is the cause and what is the result. eg. we apply voltage on a resistance, and we measure the current. As a result, the transfer function of this system is 1/R, which is admittance. Imppedance behavior could be desribed as the following sping-damper model.
 
-<center>
-
-![figure7](https://github.com/WenzelHu/robo-home/raw/master/imgs/figure7.PNG)
-
-</center>
+<p align="center"> 
+<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/figure7.PNG" width = "550" height="200">
+</p>
 
 Position of the mass M is denoted by x. The control input is given by Fenv. In this section we analyse only one dimension. With the spring constant K and damping constant D, original
-ength of the spring is xr. The dynamics of this system is therefore given by the following relation I(x, x.,Fenv):
+length of the spring is xr. The dynamics of this system is therefore given by the following relation I(x, x.,Fenv):
 
-Mx.. + Dx. + K(x-xr) = -Fenv
-
+![](http://latex.codecogs.com/gif.latex?\\frac{1}{1+sin(x)})

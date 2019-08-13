@@ -6,7 +6,7 @@ One of the most convenient and advanced ways of moving robot’s arm to a desire
 
 However, in our ﬁnal project, we propose to manipulate the robot without using *move_it*. According to some control laws that will implement impedance and admittance control of arm andgripper, some values will be calculated and directly sent to the physical interface of robot. Moreover, skins are used to modify the values sent to robot. By incorporating controllers and skin, complinat grapsing adaptve to the environment is implemented. General structure of the project is as following.
 <p align="center"> 
-<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/figure1.PNG" width = "400" height="300">
+<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/figure1.PNG">
 </p>
 
 ## 2. Cartesian Controller
@@ -44,7 +44,7 @@ For this purpose, member function `CartToJnt` of the class IKsolver can be used,
 In addition to that, because of the current goal update scheme of the arm admittance control, current goal positions are only positions that are slightly shifted from the current position, and the accumulation of reaching these set of goals results in reaching our ultimate goal position. Therefore, converted goal joint values should only change a little bit as well comparing to current joint values. If the difference between current joint values and calculated goal joint values is beyond some thereshold, we consider this goal would make the robot arm move too violently and would discard this goal. In this way, rapid move of the arm, which may cause damage to the robot, is avoided.
 
 <p align="center"> 
-<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/table1.PNG" width = "500" height="300">
+<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/table1.PNG">
 </p>
 
 ### 2.5 Subtask4: Inverse kinematics for velocity
@@ -59,7 +59,7 @@ Fortunately, the previous IK solver for position works properly and yields a Jac
 To this end, we ﬁll in the corresponding joint values and joint velocities into the command message and publish it to the arm controller. The arm then would move accordingly.
 
 <p align="center"> 
-<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/figure2.PNG" width = "400" height="400">
+<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/figure2.PNG">
 </p>
 
 ## 3. Perception
@@ -69,7 +69,7 @@ To this end, we ﬁll in the corresponding joint values and joint velocities int
 In the ﬁnal project, we implemented a new pipeline, to make it more reliable. Figure 3 shows the structure of the system.
 
 <p align="center"> 
-<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/figure3.PNG" width = "400" height="300">
+<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/figure3.PNG">
 </p>
 
 There are 5 main functional blocks, following sections will explain what is going on in each block and how they works.
@@ -124,7 +124,31 @@ The terms impedance and admittance originate from electrical system, to determin
 <img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/figure7.PNG" width = "550" height="200">
 </p>
 
+<p align="center"> 
+<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/figure8.PNG" width = "550" height="200">
+</p>
+
 Position of the mass M is denoted by x. The control input is given by Fenv. In this section we analyse only one dimension. With the spring constant K and damping constant D, original
 length of the spring is xr. The dynamics of this system is therefore given by the following relation I(x, x.,Fenv):
 
-![](http://latex.codecogs.com/gif.latex?\\frac{1}{1+sin(x)})
+*Mx.. + Dx. + K(x - xr) = -Fenv*
+
+### 4.3 Implementation
+
+<p align="center"> 
+<img src="https://github.com/WenzelHu/robo-home/raw/master/imgs/figure9.PNG">
+</p>
+
+We can easily calculate velocity and cartesian position for each time interval by using numerical integration. The cartesian position x is then sent to cartesian controller, where the cartesian position is transformed into joint space and sent to the robot control interface. Since the part in front of the wrist force-torque sensor has its own weight, and the sensor itself accumulates some inner stress, which should not be neglected. These forces must be compensated before we use the reading as Fenv, otherwise the robot may not able to reach a certain position accurately. Inner stress and gravity should be compensated separately in two different coordinate, because gravity always results perpendicularly to the sea level,and the inner stress is a constant relative to the coordinate of the sensor.
+
+## 5. Gripper Control: Impedance And Admittance Control
+
+Similar to the admittance control of robot arm.
+
+
+
+
+
+
+
+

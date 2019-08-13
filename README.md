@@ -1,5 +1,9 @@
 ﻿# Compliant Grasping
 
+## 0. Demo
+
+Demonstration video for compliant control of robot arm and object detection and compliant grasping is [here](https://drive.google.com/open?id=1HBKTryEUIRUyiV4Vrjs9Q12cXZqxqqxB)
+
 ## 1. Introduction
 
 One of the most convenient and advanced ways of moving robot’s arm to a desired position and grasp an object and avoid collision with obstacles is using *moveit* motion planning framework. Once the desired goal is sent to the *move_it* node, it will calculate a path that pypasses obstacles and reaches the goal. And by execuing this path, *move_it* will communicate with the physical interface of robot and the robot will be moved.

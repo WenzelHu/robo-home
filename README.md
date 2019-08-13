@@ -7,7 +7,7 @@ One of the most convenient and advanced ways of moving robot’s arm to a desire
 However, in our ﬁnal project, we propose to manipulate the robot without using *move_it*. According to some control laws that will implement impedance and admittance control of arm andgripper, some values will be calculated and directly sent to the physical interface of robot. Moreover, skins are used to modify the values sent to robot. By incorporating controllers and skin, complinat grapsing adaptve to the environment is implemented. General structure of the project is as following.
 <center>
 
-![figure1](<https://github.com/WenzelHu/robo-home/raw/master/imgs/figure1.PNG> =600x400)
+![figure1](https://github.com/WenzelHu/robo-home/raw/master/imgs/figure1.PNG)
 
 </center>
 
@@ -130,4 +130,18 @@ Think about a robot is grasping a small object like an apple on a table, centroi
 
 ### 4.2 Fundament of Admittance Control
 
-Physical power could be represented by the product of ﬂow and effort, eg. in electrical system, the effort is the voltage, while the ﬂow is the current, it’s true that $P = U \cdot I$. Similar in mechanical system, however in this case the effort is the force/torque, and the ﬂow is the velocity/angular velocity, and the power is given by $P = \bf{F} \cdot v$ 
+Physical power could be represented by the product of ﬂow and effort, eg. in electrical system, the effort is the voltage, while the ﬂow is the current. Similar in mechanical system, however in this case the effort is the force/torque, and the ﬂow is the velocity/angular velocity, and the power is given by the production of force/torque and velocity/angular velocity.
+
+The terms impedance and admittance originate from electrical system, to determine wether a system performs a impedance or admittance behavior, we need to tell, what is the cause and what is the result. eg. we apply voltage on a resistance, and we measure the current. As a result, the transfer function of this system is 1/R, which is admittance. Imppedance behavior could be desribed as the following sping-damper model.
+
+<center>
+
+![figure7](https://github.com/WenzelHu/robo-home/raw/master/imgs/figure7.PNG)
+
+</center>
+
+Position of the mass M is denoted by x. The control input is given by Fenv. In this section we analyse only one dimension. With the spring constant K and damping constant D, original
+ength of the spring is xr. The dynamics of this system is therefore given by the following relation I(x, x.,Fenv):
+
+Mx.. + Dx. + K(x-xr) = -Fenv
+

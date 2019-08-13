@@ -1,8 +1,133 @@
 ﻿# Compliant Grasping
 
-1.Introduction
-----------
+## 1. Introduction
+
 One of the most convenient and advanced ways of moving robot’s arm to a desired position and grasp an object and avoid collision with obstacles is using *moveit* motion planning framework. Once the desired goal is sent to the *move_it* node, it will calculate a path that pypasses obstacles and reaches the goal. And by execuing this path, *move_it* will communicate with the physical interface of robot and the robot will be moved.
 
-However, in our ﬁnal project, we propose to manipulate the robot without using *move_it*. According to some control laws that will implement impedance and admittance control of arm andgripper, some values will be calculated and directly sent to the physical interface of robot. Moreover, skins are used to modify the values sent to robot. By incorporating controllers and skin, complinat grapsing adaptve to the environment is implemented. General structure of the project is as following
-![figure1](https://github.com/WenzelHu/robo-home/blob/master/imgs/figure1.PNG?raw=true)
+However, in our ﬁnal project, we propose to manipulate the robot without using *move_it*. According to some control laws that will implement impedance and admittance control of arm andgripper, some values will be calculated and directly sent to the physical interface of robot. Moreover, skins are used to modify the values sent to robot. By incorporating controllers and skin, complinat grapsing adaptve to the environment is implemented. General structure of the project is as following.
+<center>
+
+![figure1](<https://github.com/WenzelHu/robo-home/raw/master/imgs/figure1.PNG> =600x400)
+
+</center>
+
+## 2. Cartesian Controller
+
+### 2.1 Abstract
+
+**Basic task**: Given a goal position in cartesian coordinnate, move the predeﬁned end effector of the arm to this position by directly communicate with the arm controller of Tigao instead of using *move-it* planning and execution.
+
+**Subtasks**: In order to achieve this basic goal, 4 functionalites are to implement one after another. Namely the subsequent 4 subtasks: read robot description, forward kinematics for position, inverse kinematics for position, inverse kinematics for velocity.
+
+### 2.2 Subtask1
+
+For purpose of forward kinematics and inverse kinematics calculation of the arm, it is necessary to know the structure of the Tiago arm. To do this,we need to read robot description of the robot, which contains the information about its arm. Fortunately, Tiago publishes its robot description onto the parameter server and thus robot description is stored as a parameter in the server. We can simply retrieve this parameter from the parameter server and extract the informatoin about arm.
+
+For the extraction of arm information and other subsequent kinematics calculations, *Kinematics and Dynamics Library (KDL)* are used. By using the function `treeFromString` in the library, a tree that describes the structure of the whole robot is formed. From this tree, a chain class describing the arm is to extract.
+
+We know that arm contains 7 links and its ﬁrst link and last link are *arm_1_link* and *arm_7_link* respectively. The parent link for *arm_1_link* is *torso_lift_link* and the *arm_tool_link* is one of the child link for *arm_7_link* and lies in the middle between the gripper. Therefore, we can deﬁne *arm_tool_link* as the tip of the chain, in other words, the end effector, and deﬁne *torso_lift_link* as the root of our chain. In this way, a chain that represents the arm is extracted from the tree. And since the root of our chain is torso_lift_link, it is obvious that the calculated position in cartesian coordiante by forward kinematics generates a position in the coordinate frame of torso_lift_link. And similarly, if we want to calculate the joint value by giving desired cartesian goal position to inverse kinematics solver, we need to tranform this cartesian goal position to the postion in the coordinate frame of torso_lift_link. For example, in perception part, the position of the detected object is generated, but it is in the coordinate frame of camera, in this case, the tranformation from camera coordinate to torso_lift_link is required.
+
+On the top of the chain of arm, forward kinematics solver and inverse kinematics solver can be built, which are deﬁned class in KDL.
+
+### 2.3 Subtask2: Forward kinematics for position
+
+The admittance controller of arm on the higher layer needs to know the current cartesian position to do its control. Thus, cartesian controller is supposed to calculate the current cartesian position from current joint value using the previously built forward kinematics solver.
+
+Tiago publishes its joint values to the topic */joint_status*. Thus, joint values of 7 arm joints are easy to acquire. Member function `JntToCart` of the FKsolver can convert the joint values to a cartesian position.
+
+This cartesian position is sent to a predeﬁned topic and the controllers on higher layer can subscribe this topic and use this position to do its control.
+
+### 2.4 Subtask3: Inverse kinematics for position
+
+For admittance control of arm, given a ultimate goal position, a set of current goal positions generated by admittance control will be sent to the cartesian control. Therefore, we need to convert these goal positions into goal joint values.
+
+For this purpose, member function `CartToJnt` of the class IKsolver can be used, which reads the current joint values and the goal cartesian position in and outputs the goal joint values. Besides, since the IK calculation doesn’t take the limits of joint values into account. Manual limitation of joint values are necessary. If the calculated goal joint values are beyond the range, the corresponding goal cartesian position is considered as unreachable and will be discarded.
+
+In addition to that, because of the current goal update scheme of the arm admittance control, current goal positions are only positions that are slightly shifted from the current position, and the accumulation of reaching these set of goals results in reaching our ultimate goal position. Therefore, converted goal joint values should only change a little bit as well comparing to current joint values. If the difference between current joint values and calculated goal joint values is beyond some thereshold, we consider this goal would make the robot arm move too violently and would discard this goal. In this way, rapid move of the arm, which may cause damage to the robot, is avoided.
+
+<center>
+
+![table1](<https://github.com/WenzelHu/robo-home/raw/master/imgs/table1.PNG> =500x300)
+
+</center>
+
+### 2.5 Subtask4: Inverse kinematics for velocity
+
+Arm controller in Tiago subscribes the topic */arm_controller/command* and executes the corresponding command to move the arm. Important data that need to be ﬁlled into the command message are joint names, joint values, velocities of joints when they reach their goal, time that joints would use to reach the goal.
+
+In order to simulate a uniformly accelerated motion in the current minor movement towards the current goal that is slightly shifted from current position, joints need to have a velocity, that is calculated and published by the admitance controller, when joints reach the current goal position. Since the published velocity is in cartesian coordinate, a inverse kinematics for velocity is implemented to generate the goal velocities of joints. Then, besides ﬁlling in the joint name, joint value, time from start, goal velocities of joints are ﬁlled into the command message as well.
+
+For implementation of inverse kinematics for velocity though, there is problem in the IK velocity solver of the KDL library. Execution of member method `CartToJnt` in IK velocity solver always leads to error. Thus, we abandon this method and do IK for velocity manually.
+
+Fortunately, the previous IK solver for position works properly and yields a Jacobian matrix for us. We can use singular value decomposition of the Jacobian matrix to calculate its pseudo inverse matrix. Pre multipy the goal cartesian velocity by the pseudo inverse matrix, the result is the goal joint velocity.
+To this end, we ﬁll in the corresponding joint values and joint velocities into the command message and publish it to the arm controller. The arm then would move accordingly.
+
+<center>
+
+![figure2](<https://github.com/WenzelHu/robo-home/raw/master/imgs/figure2.PNG> =500x500)
+
+</center>
+
+## 3. Perception
+
+### 3.1 Pipeline
+
+In the ﬁnal project, we implemented a new pipeline, to make it more reliable. Figure 3 shows the structure of the system.
+
+<center>
+
+![figure3](<https://github.com/WenzelHu/robo-home/raw/master/imgs/figure3.PNG> =600x400)
+
+</center>
+
+There are 5 main functional blocks, following sections will explain what is going on in each block and how they works.
+
+### 3.2 Synchroniser
+
+The calculation of point cloud is rather time consuming, in most cases, the point cloud is updated with much large delay. If the scene is changing or the camera is moving, we must take the timing problem into consideration, namely, point cloud and image must be synchronised in terms of time stamp.
+
+In this block, an image buffer is implemented to buffer the incoming images, when a new point cloud message is received, the synchroniser will ﬁrstly compare the time stamp between buffered images and point cloud, then the image with lowest time difference is picked as a matched image for that point cloud.
+
+### 3.3 Job Management
+
+The matched image-point cloud pair is passed to this block, the matched image is then sent to YOLO, after the bounding boxes is returned, a new Job is generated in the block. The Job message contains the point cloud and the bounding boxes, it will be processed in 2 stages.
+
+### 3.4 Plane Segmentation
+
+This block was written in one node to perform plane segmentation. Some information about the range of the original point cloud is added in the job message, because they are only available before segmentation, and they are important for the next stage. The point cloud in the job message is then replaced by the point cloud without large plane.
+
+### 3.5 From2dto3d
+
+This block was written in one node to calculate the centroid of each class in the bounding boxes. Since the calibration matrix or camera intrinsic matrix is unknown, we have to project the points in the point cloud back to picture plane, to determine wether a point is within a bounding box or not. Note that the bounding box is on the pixel plane, we need to perform another projection from the pixel plane to the picture plane. Traversing all the points, and note down which points are belong to which bounding boxes. The Centroids for each bounding boxes is calculated with a pcl built-in function, and then it is sent back to the main node.
+
+<center>
+
+![figure4](<https://github.com/WenzelHu/robo-home/raw/master/imgs/figure4.PNG> =500x250)
+
+</center>
+<center>
+
+![figure5](<https://github.com/WenzelHu/robo-home/raw/master/imgs/figure5.PNG> =500x350)
+
+</center>
+<center>
+
+![figure6](<https://github.com/WenzelHu/robo-home/raw/master/imgs/figure6.PNG> =500x200)
+
+</center>
+
+### 3.6  Class-Centroid Registration
+
+Once the result from from2dto3d is received, the block performs a TF transformation from camera link to a ﬁxed link of the centroids, the transformed centroids are then stored in a local vector.
+
+## 4. Admittance Controller using wrist force-torque sensor
+
+### 4.1 Abstract
+
+Compliance control for rigid-body manipulators is always an important topic in the ﬁeld of robotics, since a speciﬁc contact force may required in many scenarios like medical robots, soldering robot etc. The robot it self should also be protected against damage caused by collision with environment. 
+
+Think about a robot is grasping a small object like an apple on a table, centroid of the object is very close to the hard surface of the table, since the data given by visual system are always found to be not sufﬁcient accurate, there exists a huge danger, if some parts of the robot hit the table, and the impact force is so great, that the gripper or arm of the robot may broken. If robot’s action could be less "rigid", which is called compliant impedance behavior, the impact would be harmless to the robot. Impedance behavior can be imposed by admittance control via additional measurement of external forces using a force-torque sensor, which is available in Tiago. To avoid the accident mentioned above, an admittance controller is introduced to our project.
+
+### 4.2 Fundament of Admittance Control
+
+Physical power could be represented by the product of ﬂow and effort, eg. in electrical system, the effort is the voltage, while the ﬂow is the current, it’s true that $P = U \cdot I$. Similar in mechanical system, however in this case the effort is the force/torque, and the ﬂow is the velocity/angular velocity, and the power is given by $P = \bf{F} \cdot v$ 
